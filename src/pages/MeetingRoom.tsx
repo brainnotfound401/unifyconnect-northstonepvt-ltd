@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Mic,
   MicOff,
   Video,
   VideoOff,
   Monitor,
+  MonitorOff,
   MessageSquare,
   Users,
   Phone,
@@ -15,42 +16,59 @@ import {
   Smile,
   Copy,
   Settings,
-  Grid3X3,
-  Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useMediaStream } from "@/hooks/useMediaStream";
+import { useScreenShare } from "@/hooks/useScreenShare";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import northstoneLogo from "@/assets/northstone-logo.jpeg";
-
-interface Participant {
-  id: string;
-  name: string;
-  avatar: string;
-  isMuted: boolean;
-  isVideoOff: boolean;
-  isSpeaking: boolean;
-}
 
 const MeetingRoom = () => {
   const { meetingId } = useParams();
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [userName, setUserName] = useState("You");
+  const [handRaised, setHandRaised] = useState(false);
 
-  // Mock participants
-  const [participants] = useState<Participant[]>([
-    { id: "1", name: "You", avatar: "Y", isMuted: false, isVideoOff: false, isSpeaking: false },
-    { id: "2", name: "Alex Chen", avatar: "A", isMuted: true, isVideoOff: false, isSpeaking: true },
-    { id: "3", name: "Sarah Miller", avatar: "S", isMuted: false, isVideoOff: true, isSpeaking: false },
-    { id: "4", name: "John Davis", avatar: "J", isMuted: false, isVideoOff: false, isSpeaking: false },
-    { id: "5", name: "Emma Wilson", avatar: "E", isMuted: true, isVideoOff: false, isSpeaking: false },
-    { id: "6", name: "Mike Brown", avatar: "M", isMuted: false, isVideoOff: true, isSpeaking: false },
-  ]);
+  const {
+    stream,
+    isAudioEnabled,
+    isVideoEnabled,
+    startStream,
+    stopStream,
+    toggleAudio,
+    toggleVideo,
+  } = useMediaStream();
 
+  const {
+    screenStream,
+    isSharing,
+    startScreenShare,
+    stopScreenShare,
+  } = useScreenShare();
+
+  // Initialize media on mount
+  useEffect(() => {
+    const init = async () => {
+      const storedName = sessionStorage.getItem('userName');
+      if (storedName) {
+        setUserName(storedName);
+      }
+      await startStream(true, true);
+    };
+    init();
+
+    return () => {
+      stopStream();
+      stopScreenShare();
+    };
+  }, []);
+
+  // Timer
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsedTime((prev) => prev + 1);
@@ -65,15 +83,44 @@ const MeetingRoom = () => {
   };
 
   const copyMeetingLink = () => {
-    navigator.clipboard.writeText(`https://unify.northstone.com/meeting/${meetingId}`);
+    navigator.clipboard.writeText(`${window.location.origin}/join?code=${meetingId}`);
     toast({
       title: "Link Copied!",
       description: "Meeting link copied to clipboard.",
     });
   };
 
+  const handleScreenShare = async () => {
+    if (isSharing) {
+      stopScreenShare();
+      toast({
+        title: "Stopped Sharing",
+        description: "You stopped sharing your screen",
+      });
+    } else {
+      const result = await startScreenShare();
+      if (result) {
+        toast({
+          title: "Sharing Screen",
+          description: "You are now sharing your screen",
+        });
+      }
+    }
+  };
+
+  const handleRaiseHand = () => {
+    setHandRaised(!handRaised);
+    toast({
+      title: handRaised ? "Hand Lowered" : "Hand Raised",
+      description: handRaised ? "You lowered your hand" : "You raised your hand",
+    });
+  };
+
   const leaveMeeting = () => {
-    window.location.href = "/dashboard";
+    stopStream();
+    stopScreenShare();
+    sessionStorage.removeItem('userName');
+    navigate("/dashboard");
   };
 
   return (
@@ -112,72 +159,65 @@ const MeetingRoom = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Video Grid */}
         <div className="flex-1 p-4 overflow-auto">
-          <div className="h-full grid grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-fr">
-            {participants.map((participant, index) => (
+          <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-3 auto-rows-fr">
+            {/* Screen share (if active) */}
+            {isSharing && screenStream && (
               <motion.div
-                key={participant.id}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className={`relative rounded-xl overflow-hidden bg-surface ${
-                  participant.isSpeaking ? "ring-2 ring-primary" : ""
-                }`}
+                className="col-span-full lg:col-span-2 relative rounded-xl overflow-hidden bg-surface min-h-[300px]"
               >
-                {participant.isVideoOff ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-secondary">
-                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-2xl md:text-3xl font-semibold text-muted-foreground">
-                        {participant.avatar}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-surface to-surface-elevated flex items-center justify-center">
-                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-2xl md:text-3xl font-semibold text-muted-foreground">
-                        {participant.avatar}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Participant Info */}
-                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-background/80 to-transparent">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium truncate">
-                      {participant.name}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {participant.isMuted && (
-                        <div className="w-6 h-6 rounded-full bg-destructive/20 flex items-center justify-center">
-                          <MicOff className="h-3 w-3 text-destructive" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <video
+                  autoPlay
+                  playsInline
+                  ref={(el) => {
+                    if (el && screenStream) {
+                      el.srcObject = screenStream;
+                    }
+                  }}
+                  className="w-full h-full object-contain bg-black"
+                />
+                <div className="absolute bottom-2 left-2 bg-background/80 px-2 py-1 rounded text-sm">
+                  <Monitor className="h-4 w-4 inline mr-1" />
+                  You're sharing your screen
                 </div>
-
-                {/* Speaking Indicator */}
-                {participant.isSpeaking && (
-                  <div className="absolute top-2 right-2">
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3].map((i) => (
-                        <motion.div
-                          key={i}
-                          animate={{ scaleY: [1, 1.5, 1] }}
-                          transition={{
-                            duration: 0.4,
-                            repeat: Infinity,
-                            delay: i * 0.1,
-                          }}
-                          className="w-1 h-3 bg-primary rounded-full"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
               </motion.div>
-            ))}
+            )}
+
+            {/* Local video */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="min-h-[200px]"
+            >
+              <VideoPlayer
+                stream={stream}
+                name={userName}
+                isLocal={true}
+                isMuted={!isAudioEnabled}
+                isVideoOff={!isVideoEnabled}
+                className="h-full w-full"
+              />
+            </motion.div>
+
+            {/* Placeholder for remote participants */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+              className="min-h-[200px] relative rounded-xl overflow-hidden bg-surface"
+            >
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary">
+                <Users className="h-12 w-12 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm text-center px-4">
+                  Waiting for others to join...
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Share the meeting code: <span className="font-mono text-primary">{meetingId}</span>
+                </p>
+              </div>
+            </motion.div>
           </div>
         </div>
 
@@ -190,26 +230,34 @@ const MeetingRoom = () => {
             className="border-l border-border bg-card overflow-hidden"
           >
             <div className="h-full flex flex-col">
-              <div className="p-4 border-b border-border">
+              <div className="p-4 border-b border-border flex items-center justify-between">
                 <h3 className="font-display font-semibold">
                   {showChat ? "Chat" : "Participants"}
                 </h3>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => {
+                    setShowChat(false);
+                    setShowParticipants(false);
+                  }}
+                >
+                  ×
+                </Button>
               </div>
               <div className="flex-1 p-4 overflow-auto">
                 {showParticipants && (
                   <div className="space-y-2">
-                    {participants.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                          <span className="text-sm font-medium">{p.avatar}</span>
-                        </div>
-                        <span className="text-sm flex-1">{p.name}</span>
-                        {p.isMuted && <MicOff className="h-4 w-4 text-muted-foreground" />}
+                    <div className="flex items-center gap-3 p-2 rounded-lg bg-primary/10">
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary">
+                          {userName[0]?.toUpperCase()}
+                        </span>
                       </div>
-                    ))}
+                      <span className="text-sm flex-1">{userName} (You)</span>
+                      {!isAudioEnabled && <MicOff className="h-4 w-4 text-muted-foreground" />}
+                      {handRaised && <Hand className="h-4 w-4 text-yellow-500" />}
+                    </div>
                   </div>
                 )}
                 {showChat && (
@@ -228,47 +276,39 @@ const MeetingRoom = () => {
         <div className="flex items-center gap-2 md:gap-3">
           {/* Mic */}
           <Button
-            variant={isMuted ? "destructive" : "secondary"}
+            variant={!isAudioEnabled ? "destructive" : "secondary"}
             size="icon-lg"
-            onClick={() => setIsMuted(!isMuted)}
+            onClick={toggleAudio}
             className="rounded-full"
           >
-            {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            {!isAudioEnabled ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
           </Button>
 
           {/* Camera */}
           <Button
-            variant={isVideoOff ? "destructive" : "secondary"}
+            variant={!isVideoEnabled ? "destructive" : "secondary"}
             size="icon-lg"
-            onClick={() => setIsVideoOff(!isVideoOff)}
+            onClick={toggleVideo}
             className="rounded-full"
           >
-            {isVideoOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
+            {!isVideoEnabled ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
           </Button>
 
           {/* Screen Share */}
           <Button
-            variant={isScreenSharing ? "default" : "secondary"}
+            variant={isSharing ? "default" : "secondary"}
             size="icon-lg"
-            onClick={() => {
-              setIsScreenSharing(!isScreenSharing);
-              toast({
-                title: isScreenSharing ? "Stopped Sharing" : "Sharing Screen",
-                description: isScreenSharing
-                  ? "You stopped sharing your screen"
-                  : "You are now sharing your screen",
-              });
-            }}
+            onClick={handleScreenShare}
             className="rounded-full hidden md:flex"
           >
-            <Monitor className="h-5 w-5" />
+            {isSharing ? <MonitorOff className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
           </Button>
 
           {/* Raise Hand */}
           <Button
-            variant="secondary"
+            variant={handRaised ? "default" : "secondary"}
             size="icon-lg"
-            onClick={() => toast({ title: "Hand Raised", description: "You raised your hand" })}
+            onClick={handleRaiseHand}
             className="rounded-full hidden md:flex"
           >
             <Hand className="h-5 w-5" />

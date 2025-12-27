@@ -1,20 +1,53 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Video, Mic, MicOff, VideoOff, Settings } from "lucide-react";
+import { ArrowLeft, Video, Mic, MicOff, VideoOff, Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useMediaStream } from "@/hooks/useMediaStream";
 import northstoneLogo from "@/assets/northstone-logo.jpeg";
 
 const JoinMeeting = () => {
   const navigate = useNavigate();
   const [meetingCode, setMeetingCode] = useState("");
   const [name, setName] = useState("");
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  const {
+    stream,
+    isAudioEnabled,
+    isVideoEnabled,
+    error,
+    startStream,
+    toggleAudio,
+    toggleVideo,
+    stopStream,
+  } = useMediaStream();
+
+  useEffect(() => {
+    const initCamera = async () => {
+      setIsLoading(true);
+      await startStream(true, true);
+      setIsLoading(false);
+    };
+    initCamera();
+
+    return () => {
+      stopStream();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   const handleJoin = () => {
-    if (meetingCode.trim()) {
+    if (meetingCode.trim() && name.trim()) {
+      // Store name in sessionStorage for the meeting room
+      sessionStorage.setItem('userName', name);
       navigate(`/meeting/${meetingCode}`);
     }
   };
@@ -59,7 +92,11 @@ const JoinMeeting = () => {
           {/* Preview Section */}
           <div className="order-2 md:order-1">
             <div className="aspect-video rounded-2xl bg-surface overflow-hidden relative">
-              {isVideoOff ? (
+              {isLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-secondary">
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                </div>
+              ) : !isVideoEnabled || !stream ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-secondary">
                   <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center">
                     <span className="text-4xl font-semibold text-muted-foreground">
@@ -68,30 +105,41 @@ const JoinMeeting = () => {
                   </div>
                 </div>
               ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-surface to-surface-elevated flex items-center justify-center">
-                  <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center">
-                    <Video className="h-10 w-10 text-muted-foreground" />
-                  </div>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{ transform: 'scaleX(-1)' }}
+                />
+              )}
+
+              {error && (
+                <div className="absolute top-4 left-4 right-4 bg-destructive/90 text-destructive-foreground text-sm p-2 rounded-lg">
+                  {error}
                 </div>
               )}
 
               {/* Preview Controls */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
                 <Button
-                  variant={isMuted ? "destructive" : "secondary"}
+                  variant={!isAudioEnabled ? "destructive" : "secondary"}
                   size="icon"
-                  onClick={() => setIsMuted(!isMuted)}
+                  onClick={toggleAudio}
                   className="rounded-full"
+                  disabled={isLoading}
                 >
-                  {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {!isAudioEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </Button>
                 <Button
-                  variant={isVideoOff ? "destructive" : "secondary"}
+                  variant={!isVideoEnabled ? "destructive" : "secondary"}
                   size="icon"
-                  onClick={() => setIsVideoOff(!isVideoOff)}
+                  onClick={toggleVideo}
                   className="rounded-full"
+                  disabled={isLoading}
                 >
-                  {isVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+                  {!isVideoEnabled ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
                 </Button>
                 <Button variant="secondary" size="icon" className="rounded-full">
                   <Settings className="h-4 w-4" />
@@ -155,7 +203,7 @@ const JoinMeeting = () => {
                 size="xl"
                 className="w-full"
                 onClick={handleJoin}
-                disabled={!meetingCode.trim()}
+                disabled={!meetingCode.trim() || !name.trim()}
               >
                 Join Meeting
               </Button>
