@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Building2, ArrowRight, UserPlus } from 'lucide-react';
+import { User, Building2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,10 +40,6 @@ const AccountSetup = () => {
     } else if (selectedType === 'organization') {
       navigate('/create-organization');
     }
-  };
-
-  const handleJoinOrganization = () => {
-    navigate('/join-organization');
   };
 
   if (loading) {
@@ -145,20 +141,6 @@ const AccountSetup = () => {
           </span>
         </Button>
 
-        {/* Join Organization Option */}
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground mb-2">
-            Have an organization code?
-          </p>
-          <Button
-            variant="outline"
-            onClick={handleJoinOrganization}
-            className="gap-2"
-          >
-            <UserPlus className="h-4 w-4" />
-            Join an Organization
-          </Button>
-        </div>
       </motion.div>
     </div>
   );
