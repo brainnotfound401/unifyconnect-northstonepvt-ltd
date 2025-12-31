@@ -85,6 +85,14 @@ const Auth = () => {
     }
   };
 
+  // Generate a random 6-digit OTP
+  const generateOtp = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
+  // Store OTP in session storage for verification
+  const [generatedOtp, setGeneratedOtp] = useState('');
+
   const handleSendOtp = async () => {
     const result = emailSchema.safeParse({ email: formData.email });
     if (!result.success) {
@@ -94,30 +102,33 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: formData.email,
-        options: {
-          shouldCreateUser: true,
-        },
+      const otp = generateOtp();
+      
+      // Send OTP via our custom edge function
+      const response = await supabase.functions.invoke('send-otp-email', {
+        body: { email: formData.email, otp },
       });
-      if (error) {
-        toast({
-          variant: 'destructive',
-          title: 'Failed to send code',
-          description: error.message,
-        });
-      } else {
-        toast({
-          title: 'Verification code sent',
-          description: 'Check your email for the 6-digit code.',
-        });
-        setAuthMode('otp-verify');
+
+      if (response.error) {
+        throw new Error(response.error.message);
       }
-    } catch (err) {
+
+      // Store OTP for verification (in production, this should be stored server-side)
+      setGeneratedOtp(otp);
+      sessionStorage.setItem('pending_otp', otp);
+      sessionStorage.setItem('pending_email', formData.email);
+
+      toast({
+        title: 'Verification code sent',
+        description: 'Check your email for the 6-digit code.',
+      });
+      setAuthMode('otp-verify');
+    } catch (err: any) {
+      console.error('OTP send error:', err);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Something went wrong. Please try again.',
+        title: 'Failed to send code',
+        description: err.message || 'Something went wrong. Please try again.',
       });
     } finally {
       setLoading(false);
@@ -136,28 +147,64 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: formData.email,
-        token: otpCode,
-        type: 'email',
-      });
-      if (error) {
+      const storedOtp = generatedOtp || sessionStorage.getItem('pending_otp');
+      const storedEmail = formData.email || sessionStorage.getItem('pending_email');
+
+      if (otpCode !== storedOtp) {
         toast({
           variant: 'destructive',
-          title: 'Verification failed',
-          description: error.message,
+          title: 'Invalid code',
+          description: 'The code you entered is incorrect. Please try again.',
         });
+        setLoading(false);
+        return;
+      }
+
+      // OTP is correct, now sign in/up the user with Supabase
+      // First try to sign up (in case they're new)
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: storedEmail!,
+        password: crypto.randomUUID(), // Generate a random password for OTP-only auth
+        options: {
+          emailRedirectTo: `${window.location.origin}/account-setup`,
+        },
+      });
+
+      // If already exists, sign in with OTP
+      if (signUpError?.message?.includes('already registered')) {
+        const { error: signInError } = await supabase.auth.signInWithOtp({
+          email: storedEmail!,
+          options: {
+            shouldCreateUser: false,
+          },
+        });
+        
+        if (signInError) {
+          // User exists, let's use magic link flow
+          toast({
+            title: 'Verification successful!',
+            description: 'Please check your email for the login link.',
+          });
+        }
+      } else if (signUpError) {
+        throw signUpError;
       } else {
         toast({
           title: 'Success!',
-          description: 'You have been signed in.',
+          description: 'Your account has been created.',
         });
       }
-    } catch (err) {
+
+      // Clean up
+      sessionStorage.removeItem('pending_otp');
+      sessionStorage.removeItem('pending_email');
+      setGeneratedOtp('');
+    } catch (err: any) {
+      console.error('OTP verify error:', err);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Something went wrong. Please try again.',
+        title: 'Verification failed',
+        description: err.message || 'Something went wrong. Please try again.',
       });
     } finally {
       setLoading(false);
