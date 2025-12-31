@@ -85,14 +85,6 @@ const Auth = () => {
     }
   };
 
-  // Generate a random 6-digit OTP
-  const generateOtp = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
-  // Store OTP in session storage for verification
-  const [generatedOtp, setGeneratedOtp] = useState('');
-
   const handleSendOtp = async () => {
     const result = emailSchema.safeParse({ email: formData.email });
     if (!result.success) {
@@ -102,21 +94,17 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const otp = generateOtp();
-      
-      // Send OTP via our custom edge function
-      const response = await supabase.functions.invoke('send-otp-email', {
-        body: { email: formData.email, otp },
+      // Use Supabase's built-in OTP which sends the email automatically
+      const { error } = await supabase.auth.signInWithOtp({
+        email: formData.email,
+        options: {
+          shouldCreateUser: true,
+        },
       });
 
-      if (response.error) {
-        throw new Error(response.error.message);
+      if (error) {
+        throw error;
       }
-
-      // Store OTP for verification (in production, this should be stored server-side)
-      setGeneratedOtp(otp);
-      sessionStorage.setItem('pending_otp', otp);
-      sessionStorage.setItem('pending_email', formData.email);
 
       toast({
         title: 'Verification code sent',
@@ -147,64 +135,27 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const storedOtp = generatedOtp || sessionStorage.getItem('pending_otp');
-      const storedEmail = formData.email || sessionStorage.getItem('pending_email');
-
-      if (otpCode !== storedOtp) {
-        toast({
-          variant: 'destructive',
-          title: 'Invalid code',
-          description: 'The code you entered is incorrect. Please try again.',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // OTP is correct, now sign in/up the user with Supabase
-      // First try to sign up (in case they're new)
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: storedEmail!,
-        password: crypto.randomUUID(), // Generate a random password for OTP-only auth
-        options: {
-          emailRedirectTo: `${window.location.origin}/account-setup`,
-        },
+      // Verify OTP using Supabase's built-in verification
+      const { error } = await supabase.auth.verifyOtp({
+        email: formData.email,
+        token: otpCode,
+        type: 'email',
       });
 
-      // If already exists, sign in with OTP
-      if (signUpError?.message?.includes('already registered')) {
-        const { error: signInError } = await supabase.auth.signInWithOtp({
-          email: storedEmail!,
-          options: {
-            shouldCreateUser: false,
-          },
-        });
-        
-        if (signInError) {
-          // User exists, let's use magic link flow
-          toast({
-            title: 'Verification successful!',
-            description: 'Please check your email for the login link.',
-          });
-        }
-      } else if (signUpError) {
-        throw signUpError;
-      } else {
-        toast({
-          title: 'Success!',
-          description: 'Your account has been created.',
-        });
+      if (error) {
+        throw error;
       }
 
-      // Clean up
-      sessionStorage.removeItem('pending_otp');
-      sessionStorage.removeItem('pending_email');
-      setGeneratedOtp('');
+      toast({
+        title: 'Success!',
+        description: 'You have been signed in.',
+      });
     } catch (err: any) {
       console.error('OTP verify error:', err);
       toast({
         variant: 'destructive',
         title: 'Verification failed',
-        description: err.message || 'Something went wrong. Please try again.',
+        description: err.message || 'Invalid or expired code. Please try again.',
       });
     } finally {
       setLoading(false);
