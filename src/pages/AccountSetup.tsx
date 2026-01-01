@@ -27,7 +27,7 @@ const AccountSetup = () => {
   }, [profile, navigate]);
 
   const handleContinue = async () => {
-    if (!user || !selectedType) return;
+    if (!selectedType) return;
 
     if (selectedType === 'personal') {
       // Navigate to personal info setup page
