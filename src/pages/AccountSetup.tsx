@@ -12,11 +12,12 @@ const AccountSetup = () => {
   const navigate = useNavigate();
   const { user, profile, loading, refreshProfile } = useAuth();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth');
-    }
-  }, [user, loading, navigate]);
+  // Temporarily disabled for preview
+  // useEffect(() => {
+  //   if (!loading && !user) {
+  //     navigate('/auth');
+  //   }
+  // }, [user, loading, navigate]);
 
   useEffect(() => {
     // If user already has a completed profile, redirect to dashboard
