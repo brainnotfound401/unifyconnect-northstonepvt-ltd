@@ -1,89 +1,65 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
   Video,
-  Phone,
-  Presentation,
-  Plus,
   Calendar,
-  Users,
-  Building2,
+  MessageSquare,
+  Plus,
   Settings,
   LogOut,
-  Copy,
   Clock,
-  ArrowRight,
+  Users,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import northstoneLogo from "@/assets/northstone-logo.jpeg";
 
 const Dashboard = () => {
   const { toast } = useToast();
+  const { profile, signOut } = useAuth();
   const [meetingCode, setMeetingCode] = useState("");
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [userTimezone, setUserTimezone] = useState("");
 
-  const quickActions = [
-    {
-      icon: Video,
-      label: "New Meeting",
-      description: "Start an instant meeting",
-      gradient: "from-primary to-primary/70",
-      action: () => window.location.href = "/meeting/new-" + Date.now(),
-    },
-    {
-      icon: Calendar,
-      label: "Schedule",
-      description: "Plan a future meeting",
-      gradient: "from-accent to-accent/70",
-      action: () => toast({ title: "Schedule Meeting", description: "Meeting scheduler coming soon!" }),
-    },
-    {
-      icon: Presentation,
-      label: "Webinar",
-      description: "Host a large event",
-      gradient: "from-warning to-warning/70",
-      action: () => toast({ title: "Start Webinar", description: "Webinar feature coming soon!" }),
-    },
-    {
-      icon: Phone,
-      label: "Voice Call",
-      description: "Audio-only meeting",
-      gradient: "from-success to-success/70",
-      action: () => window.location.href = "/meeting/voice-" + Date.now(),
-    },
-  ];
+  // Get user's timezone and update time every second
+  useEffect(() => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setUserTimezone(timezone);
 
-  const upcomingMeetings = [
-    {
-      title: "Team Standup",
-      time: "10:00 AM",
-      date: "Today",
-      participants: 8,
-      type: "video",
-    },
-    {
-      title: "Product Review",
-      time: "2:30 PM",
-      date: "Today",
-      participants: 12,
-      type: "webinar",
-    },
-    {
-      title: "Client Call",
-      time: "11:00 AM",
-      date: "Tomorrow",
-      participants: 4,
-      type: "video",
-    },
-  ];
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
 
-  const myGroups = [
-    { name: "Engineering", members: 24, color: "bg-primary" },
-    { name: "Design Team", members: 8, color: "bg-accent" },
-    { name: "Marketing", members: 15, color: "bg-warning" },
-  ];
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  const handleStartMeeting = () => {
+    const meetingId = "meet-" + Date.now();
+    window.location.href = `/meeting/${meetingId}`;
+  };
 
   const handleJoinMeeting = () => {
     if (meetingCode.trim()) {
@@ -97,17 +73,30 @@ const Dashboard = () => {
     }
   };
 
-  const generateMeetingLink = () => {
-    const code = "unify-" + Math.random().toString(36).substring(2, 8);
-    navigator.clipboard.writeText(`https://unify.northstone.com/${code}`);
+  const handleScheduleMeeting = () => {
     toast({
-      title: "Link Copied!",
-      description: "Meeting link copied to clipboard.",
+      title: "Schedule Meeting",
+      description: "Meeting scheduler coming soon!",
     });
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.href = "/";
+  };
+
+  const getInitials = (name: string | null) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:flex flex-col">
         {/* Logo */}
@@ -131,10 +120,10 @@ const Dashboard = () => {
         <nav className="flex-1">
           <div className="space-y-1">
             {[
+              { icon: Calendar, label: "Calendar", active: false },
+              { icon: MessageSquare, label: "Chats", active: false },
               { icon: Video, label: "Meetings", active: true },
-              { icon: Users, label: "Groups" },
-              { icon: Building2, label: "Organization" },
-              { icon: Calendar, label: "Calendar" },
+              { icon: Users, label: "Contacts", active: false },
             ].map((item) => (
               <button
                 key={item.label}
@@ -149,28 +138,6 @@ const Dashboard = () => {
               </button>
             ))}
           </div>
-
-          <div className="mt-8">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">
-              My Groups
-            </h4>
-            <div className="space-y-1">
-              {myGroups.map((group) => (
-                <button
-                  key={group.name}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary transition-colors"
-                >
-                  <div className={`w-2 h-2 rounded-full ${group.color}`} />
-                  <span>{group.name}</span>
-                  <span className="ml-auto text-xs">{group.members}</span>
-                </button>
-              ))}
-              <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-primary hover:bg-primary/10 transition-colors">
-                <Plus className="h-4 w-4" />
-                Create Group
-              </button>
-            </div>
-          </div>
         </nav>
 
         {/* Bottom */}
@@ -179,147 +146,130 @@ const Dashboard = () => {
             <Settings className="h-5 w-5" />
             Settings
           </button>
-          <Link
-            to="/"
+          <button
+            onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary transition-colors"
           >
             <LogOut className="h-5 w-5" />
             Sign Out
-          </Link>
+          </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 p-6 lg:p-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="font-display text-2xl md:text-3xl font-bold">
-              Welcome back! 👋
-            </h1>
-            <p className="text-muted-foreground">
-              Start or join a meeting to connect with your team.
-            </p>
-          </div>
-
-          {/* Join Meeting */}
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Enter meeting code"
-              value={meetingCode}
-              onChange={(e) => setMeetingCode(e.target.value)}
-              className="w-48 bg-secondary border-border"
-            />
-            <Button onClick={handleJoinMeeting}>Join</Button>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {quickActions.map((action, index) => (
-            <motion.button
-              key={action.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              onClick={action.action}
-              className="group p-6 rounded-2xl glass hover:glass-elevated transition-all duration-300 text-left"
-            >
-              <div
-                className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-              >
-                <action.icon className="h-6 w-6 text-foreground" />
-              </div>
-              <h3 className="font-display font-semibold mb-1">{action.label}</h3>
-              <p className="text-sm text-muted-foreground">
-                {action.description}
-              </p>
-            </motion.button>
-          ))}
-        </div>
-
-        {/* Meeting Link Generator */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mb-8 p-6 rounded-2xl glass"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <main className="lg:ml-64 flex-1 p-6 lg:p-8">
+        {/* Top Header with Profile */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-12 w-12 border-2 border-primary">
+              <AvatarImage src={profile?.avatar_url || undefined} />
+              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                {getInitials(profile?.full_name)}
+              </AvatarFallback>
+            </Avatar>
             <div>
-              <h3 className="font-display font-semibold mb-1">
-                Generate Meeting Link
-              </h3>
+              <h1 className="font-display text-xl font-bold">
+                {profile?.full_name || "Welcome"}
+              </h1>
               <p className="text-sm text-muted-foreground">
-                Create a shareable link for your next meeting
+                {profile?.email || "Personal Account"}
               </p>
             </div>
-            <Button onClick={generateMeetingLink} variant="outline">
-              <Copy className="h-4 w-4 mr-2" />
-              Generate & Copy Link
-            </Button>
-          </div>
-        </motion.div>
-
-        {/* Upcoming Meetings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-xl font-semibold">
-              Upcoming Meetings
-            </h2>
-            <Button variant="ghost" size="sm">
-              View All
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
           </div>
 
-          <div className="space-y-3">
-            {upcomingMeetings.map((meeting, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + index * 0.1 }}
-                className="p-4 rounded-xl glass hover:glass-elevated transition-all duration-300 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      meeting.type === "webinar"
-                        ? "bg-warning/20 text-warning"
-                        : "bg-primary/20 text-primary"
-                    }`}
-                  >
-                    {meeting.type === "webinar" ? (
-                      <Presentation className="h-5 w-5" />
-                    ) : (
-                      <Video className="h-5 w-5" />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-medium">{meeting.title}</h4>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {meeting.time}
-                      </span>
-                      <span>{meeting.date}</span>
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {meeting.participants}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <Button size="sm">Join</Button>
-              </motion.div>
-            ))}
+          {/* Mobile menu button placeholder */}
+          <div className="lg:hidden">
+            <Button variant="ghost" size="icon">
+              <User className="h-5 w-5" />
+            </Button>
           </div>
-        </motion.div>
+        </div>
+
+        {/* Center Content */}
+        <div className="flex flex-col items-center justify-center py-8">
+          {/* Time and Date Display */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
+          >
+            <div className="text-6xl md:text-8xl font-display font-bold text-primary mb-2">
+              {formatTime(currentTime)}
+            </div>
+            <div className="text-xl md:text-2xl text-muted-foreground">
+              {formatDate(currentTime)}
+            </div>
+            <div className="text-sm text-muted-foreground/70 mt-1 flex items-center justify-center gap-1">
+              <Clock className="h-4 w-4" />
+              {userTimezone}
+            </div>
+          </motion.div>
+
+          {/* Meeting Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl mb-8">
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              onClick={handleStartMeeting}
+              className="group p-6 rounded-2xl glass hover:glass-elevated transition-all duration-300 text-center"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <Video className="h-8 w-8 text-foreground" />
+              </div>
+              <h3 className="font-display text-lg font-semibold mb-1">
+                Start Meeting
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Start an instant video call
+              </p>
+            </motion.button>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="p-6 rounded-2xl glass text-center"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center mx-auto mb-4">
+                <Plus className="h-8 w-8 text-foreground" />
+              </div>
+              <h3 className="font-display text-lg font-semibold mb-3">
+                Join Meeting
+              </h3>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter code"
+                  value={meetingCode}
+                  onChange={(e) => setMeetingCode(e.target.value)}
+                  className="bg-secondary border-border text-sm"
+                />
+                <Button onClick={handleJoinMeeting} size="sm">
+                  Join
+                </Button>
+              </div>
+            </motion.div>
+
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              onClick={handleScheduleMeeting}
+              className="group p-6 rounded-2xl glass hover:glass-elevated transition-all duration-300 text-center"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-warning to-warning/70 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <Calendar className="h-8 w-8 text-foreground" />
+              </div>
+              <h3 className="font-display text-lg font-semibold mb-1">
+                Schedule
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Plan a future meeting
+              </p>
+            </motion.button>
+          </div>
+        </div>
       </main>
     </div>
   );

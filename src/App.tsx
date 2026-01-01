@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AccountSetup from "./pages/AccountSetup";
+import PersonalInfoSetup from "./pages/PersonalInfoSetup";
 import CreateOrganization from "./pages/CreateOrganization";
 import JoinOrganization from "./pages/JoinOrganization";
 import OrganizationAdmin from "./pages/OrganizationAdmin";
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/account-setup" element={<AccountSetup />} />
+            <Route path="/personal-info-setup" element={<PersonalInfoSetup />} />
             <Route path="/create-organization" element={<CreateOrganization />} />
             <Route path="/join-organization" element={<JoinOrganization />} />
             <Route path="/organization" element={<OrganizationAdmin />} />

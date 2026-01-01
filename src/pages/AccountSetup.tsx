@@ -30,14 +30,8 @@ const AccountSetup = () => {
     if (!user || !selectedType) return;
 
     if (selectedType === 'personal') {
-      // Update profile to personal type and navigate to dashboard
-      await supabase
-        .from('profiles')
-        .update({ account_type: 'personal' })
-        .eq('id', user.id);
-      
-      await refreshProfile();
-      navigate('/dashboard');
+      // Navigate to personal info setup page
+      navigate('/personal-info-setup');
     } else if (selectedType === 'organization') {
       navigate('/create-organization');
     } else if (selectedType === 'join') {
