@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Building2, ArrowRight } from 'lucide-react';
+import { User, Building2, Users, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import northstoneLogo from '@/assets/northstone-logo.jpeg';
 
 const AccountSetup = () => {
-  const [selectedType, setSelectedType] = useState<'personal' | 'organization' | null>(null);
+  const [selectedType, setSelectedType] = useState<'personal' | 'organization' | 'join' | null>(null);
   const navigate = useNavigate();
   const { user, profile, loading, refreshProfile } = useAuth();
 
@@ -39,6 +39,8 @@ const AccountSetup = () => {
       navigate('/dashboard');
     } else if (selectedType === 'organization') {
       navigate('/create-organization');
+    } else if (selectedType === 'join') {
+      navigate('/join-organization');
     }
   };
 
@@ -88,7 +90,7 @@ const AccountSetup = () => {
         </div>
 
         {/* Options */}
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div className="grid gap-4 mb-6">
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -99,13 +101,20 @@ const AccountSetup = () => {
                 : 'border-border hover:border-primary/50'
             }`}
           >
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-              <User className="h-6 w-6 text-primary" />
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <User className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Personal Use</h3>
+                  <span className="text-sm font-medium text-green-600">Free</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Use Unify for personal meetings, small team calls, and individual use.
+                </p>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold mb-2">Personal Account</h3>
-            <p className="text-sm text-muted-foreground">
-              Use Unify for personal meetings, small team calls, and individual use.
-            </p>
           </motion.button>
 
           <motion.button
@@ -118,13 +127,46 @@ const AccountSetup = () => {
                 : 'border-border hover:border-primary/50'
             }`}
           >
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-              <Building2 className="h-6 w-6 text-primary" />
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Building2 className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Create Organization</h3>
+                  <span className="text-sm font-medium text-primary">₹100</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Set up a workspace for your company or team with admin controls.
+                </p>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold mb-2">Create Organization</h3>
-            <p className="text-sm text-muted-foreground">
-              Set up a workspace for your company or team with admin controls.
-            </p>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setSelectedType('join')}
+            className={`p-6 rounded-2xl border-2 text-left transition-all ${
+              selectedType === 'join'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50'
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Join Organization</h3>
+                  <span className="text-sm font-medium text-green-600">Free</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Join an existing organization using an invite code.
+                </p>
+              </div>
+            </div>
           </motion.button>
         </div>
 
