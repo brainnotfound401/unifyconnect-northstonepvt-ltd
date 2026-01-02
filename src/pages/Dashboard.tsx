@@ -27,18 +27,33 @@ const Dashboard = () => {
   const [userTimezone, setUserTimezone] = useState("");
   const [personalInfo, setPersonalInfo] = useState<{ fullName?: string } | null>(null);
 
-  // Get user's personal info from localStorage (for preview mode)
+  // Request location and get timezone
   useEffect(() => {
-    const storedInfo = localStorage.getItem('userPersonalInfo');
-    if (storedInfo) {
-      setPersonalInfo(JSON.parse(storedInfo));
-    }
-  }, []);
+    const getLocationTimezone = async () => {
+      try {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              setUserTimezone(timezone);
+            },
+            () => {
+              // Fallback to system timezone if permission denied
+              const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              setUserTimezone(timezone);
+            }
+          );
+        } else {
+          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          setUserTimezone(timezone);
+        }
+      } catch {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        setUserTimezone(timezone);
+      }
+    };
 
-  // Get user's timezone and update time every second
-  useEffect(() => {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    setUserTimezone(timezone);
+    getLocationTimezone();
 
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -51,16 +66,14 @@ const Dashboard = () => {
     return date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
       hour12: true,
     });
   };
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
+      weekday: "short",
+      month: "short",
       day: "numeric",
     });
   };
@@ -198,22 +211,36 @@ const Dashboard = () => {
 
         {/* Center Content */}
         <div className="flex flex-col items-center justify-center py-8">
-          {/* Time and Date Display */}
+          {/* Time and Date Display with Background */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-center mb-12"
+            className="relative w-full max-w-md mb-10 rounded-2xl overflow-hidden"
           >
-            <div className="text-6xl md:text-8xl font-display font-bold text-primary mb-2">
-              {formatTime(currentTime)}
-            </div>
-            <div className="text-xl md:text-2xl text-muted-foreground">
-              {formatDate(currentTime)}
-            </div>
-            <div className="text-sm text-muted-foreground/70 mt-1 flex items-center justify-center gap-1">
-              <Clock className="h-4 w-4" />
-              {userTimezone}
+            {/* Background Image */}
+            <div 
+              className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-primary/5"
+              style={{
+                backgroundImage: `url('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+            
+            {/* Content */}
+            <div className="relative p-6 text-center">
+              <div className="text-4xl md:text-5xl font-display font-bold text-foreground mb-1">
+                {formatTime(currentTime)}
+              </div>
+              <div className="text-base text-muted-foreground">
+                {formatDate(currentTime)}
+              </div>
+              <div className="text-xs text-muted-foreground/70 mt-2 flex items-center justify-center gap-1">
+                <Clock className="h-3 w-3" />
+                {userTimezone}
+              </div>
             </div>
           </motion.div>
 
