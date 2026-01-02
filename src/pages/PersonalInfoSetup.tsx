@@ -39,21 +39,23 @@ const PersonalInfoSetup = () => {
     setIsSubmitting(true);
 
     try {
-      // For now, just update full_name since other fields need migration
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          full_name: formData.fullName,
-          account_type: 'personal'
-        })
-        .eq('id', user?.id);
+      // Only update database if user is authenticated
+      if (user?.id) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            full_name: formData.fullName,
+            account_type: 'personal'
+          })
+          .eq('id', user.id);
 
-      if (error) throw error;
-
-      await refreshProfile();
+        if (error) throw error;
+        await refreshProfile();
+      }
       
-      // Store additional info in localStorage for now
+      // Store info in localStorage (works for both auth and preview mode)
       localStorage.setItem('userPersonalInfo', JSON.stringify({
+        fullName: formData.fullName,
         occupation: formData.occupation,
         dateOfBirth: formData.dateOfBirth,
         gender: formData.gender,
