@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -11,23 +11,57 @@ import {
   Clock,
   Users,
   User,
+  Camera,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import northstoneLogo from "@/assets/northstone-logo.jpeg";
+
+const BACKGROUND_OPTIONS = [
+  { id: 'mountains', label: 'Mountains', url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80' },
+  { id: 'ocean', label: 'Ocean', url: 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&q=80' },
+  { id: 'forest', label: 'Forest', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&q=80' },
+  { id: 'city', label: 'City', url: 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800&q=80' },
+  { id: 'abstract', label: 'Abstract', url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&q=80' },
+];
 
 const Dashboard = () => {
   const { toast } = useToast();
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, refreshProfile } = useAuth();
   const [meetingCode, setMeetingCode] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userTimezone, setUserTimezone] = useState("");
   const [personalInfo, setPersonalInfo] = useState<{ fullName?: string } | null>(null);
+  const [selectedBackground, setSelectedBackground] = useState(BACKGROUND_OPTIONS[0]);
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Request location and get timezone
+  // Load saved background preference
+  useEffect(() => {
+    const savedBg = localStorage.getItem('dashboardBackground');
+    if (savedBg) {
+      const found = BACKGROUND_OPTIONS.find(bg => bg.id === savedBg);
+      if (found) setSelectedBackground(found);
+    }
+    
+    const storedInfo = localStorage.getItem('userPersonalInfo');
+    if (storedInfo) {
+      setPersonalInfo(JSON.parse(storedInfo));
+    }
+
+    const savedAvatar = localStorage.getItem('localAvatarUrl');
+    if (savedAvatar) {
+      setLocalAvatarUrl(savedAvatar);
+    }
+  }, []);
   useEffect(() => {
     const getLocationTimezone = async () => {
       try {
@@ -107,6 +141,98 @@ const Dashboard = () => {
     window.location.href = "/";
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid File",
+        description: "Please upload an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // For preview mode (no auth), store locally
+      if (!user?.id) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          setLocalAvatarUrl(dataUrl);
+          localStorage.setItem('localAvatarUrl', dataUrl);
+          toast({
+            title: "Photo Updated",
+            description: "Your profile photo has been updated!",
+          });
+          setIsAvatarDialogOpen(false);
+        };
+        reader.readAsDataURL(file);
+        setIsUploading(false);
+        return;
+      }
+
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/avatar.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+
+      toast({
+        title: "Photo Updated",
+        description: "Your profile photo has been updated!",
+      });
+      setIsAvatarDialogOpen(false);
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload photo. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleBackgroundChange = (bg: typeof BACKGROUND_OPTIONS[0]) => {
+    setSelectedBackground(bg);
+    localStorage.setItem('dashboardBackground', bg.id);
+  };
+
   const getInitials = (name: string | null) => {
     if (!name) return "U";
     return name
@@ -183,14 +309,57 @@ const Dashboard = () => {
         {/* Top Header with Profile */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Avatar className="h-12 w-12 border-2 border-primary">
-              <AvatarImage src={profile?.avatar_url || undefined} />
-              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                {profile?.avatar_url ? null : (
-                  <User className="h-6 w-6" />
-                )}
-              </AvatarFallback>
-            </Avatar>
+            <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
+              <DialogTrigger asChild>
+                <button className="relative group cursor-pointer">
+                  <Avatar className="h-12 w-12 border-2 border-primary">
+                    <AvatarImage src={profile?.avatar_url || localAvatarUrl || undefined} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      <User className="h-6 w-6" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="h-4 w-4 text-white" />
+                  </div>
+                </button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Update Profile Photo</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center gap-4 py-4">
+                  <Avatar className="h-24 w-24 border-2 border-primary">
+                    <AvatarImage src={profile?.avatar_url || localAvatarUrl || undefined} />
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      <User className="h-12 w-12" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleAvatarUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="gap-2"
+                  >
+                    {isUploading ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full"
+                      />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                    {isUploading ? "Uploading..." : "Choose Photo"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
             <div>
               <h1 className="font-display text-xl font-bold">
                 {profile?.full_name || personalInfo?.fullName || "Welcome"}
@@ -216,13 +385,13 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="relative w-full max-w-md mb-10 rounded-2xl overflow-hidden"
+            className="relative w-full max-w-md mb-6 rounded-2xl overflow-hidden"
           >
             {/* Background Image */}
             <div 
               className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-primary/5"
               style={{
-                backgroundImage: `url('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80')`,
+                backgroundImage: `url('${selectedBackground.url}')`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
@@ -243,6 +412,31 @@ const Dashboard = () => {
               </div>
             </div>
           </motion.div>
+
+          {/* Background Options */}
+          <div className="flex items-center gap-2 mb-10">
+            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="flex gap-2">
+              {BACKGROUND_OPTIONS.map((bg) => (
+                <button
+                  key={bg.id}
+                  onClick={() => handleBackgroundChange(bg)}
+                  className={`w-8 h-8 rounded-lg overflow-hidden border-2 transition-all ${
+                    selectedBackground.id === bg.id
+                      ? 'border-primary scale-110'
+                      : 'border-transparent hover:border-muted-foreground/50'
+                  }`}
+                  title={bg.label}
+                >
+                  <img
+                    src={bg.url}
+                    alt={bg.label}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Meeting Actions */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl mb-8">
