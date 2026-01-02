@@ -21,10 +21,19 @@ import northstoneLogo from "@/assets/northstone-logo.jpeg";
 
 const Dashboard = () => {
   const { toast } = useToast();
-  const { profile, signOut } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const [meetingCode, setMeetingCode] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userTimezone, setUserTimezone] = useState("");
+  const [personalInfo, setPersonalInfo] = useState<{ fullName?: string } | null>(null);
+
+  // Get user's personal info from localStorage (for preview mode)
+  useEffect(() => {
+    const storedInfo = localStorage.getItem('userPersonalInfo');
+    if (storedInfo) {
+      setPersonalInfo(JSON.parse(storedInfo));
+    }
+  }, []);
 
   // Get user's timezone and update time every second
   useEffect(() => {
@@ -164,15 +173,17 @@ const Dashboard = () => {
             <Avatar className="h-12 w-12 border-2 border-primary">
               <AvatarImage src={profile?.avatar_url || undefined} />
               <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                {getInitials(profile?.full_name)}
+                {profile?.avatar_url ? null : (
+                  <User className="h-6 w-6" />
+                )}
               </AvatarFallback>
             </Avatar>
             <div>
               <h1 className="font-display text-xl font-bold">
-                {profile?.full_name || "Welcome"}
+                {profile?.full_name || personalInfo?.fullName || "Welcome"}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {profile?.email || "Personal Account"}
+                {profile?.email || user?.email || "Personal Account"}
               </p>
             </div>
           </div>
