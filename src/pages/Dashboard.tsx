@@ -12,12 +12,19 @@ import {
   Users,
   User,
   Camera,
+  MoreVertical,
   ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,15 +46,22 @@ const Dashboard = () => {
   const [userTimezone, setUserTimezone] = useState("");
   const [personalInfo, setPersonalInfo] = useState<{ fullName?: string } | null>(null);
   const [selectedBackground, setSelectedBackground] = useState(BACKGROUND_OPTIONS[0]);
+  const [customBackground, setCustomBackground] = useState<string | null>(null);
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
+  const [isBackgroundDialogOpen, setIsBackgroundDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bgFileInputRef = useRef<HTMLInputElement>(null);
 
   // Load saved background preference
   useEffect(() => {
     const savedBg = localStorage.getItem('dashboardBackground');
-    if (savedBg) {
+    const savedCustomBg = localStorage.getItem('customBackground');
+    
+    if (savedCustomBg) {
+      setCustomBackground(savedCustomBg);
+    } else if (savedBg) {
       const found = BACKGROUND_OPTIONS.find(bg => bg.id === savedBg);
       if (found) setSelectedBackground(found);
     }
@@ -230,7 +244,47 @@ const Dashboard = () => {
 
   const handleBackgroundChange = (bg: typeof BACKGROUND_OPTIONS[0]) => {
     setSelectedBackground(bg);
+    setCustomBackground(null);
     localStorage.setItem('dashboardBackground', bg.id);
+    localStorage.removeItem('customBackground');
+    setIsBackgroundDialogOpen(false);
+  };
+
+  const handleCustomBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid File",
+        description: "Please upload an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setCustomBackground(dataUrl);
+      localStorage.setItem('customBackground', dataUrl);
+      localStorage.removeItem('dashboardBackground');
+      setIsBackgroundDialogOpen(false);
+      toast({
+        title: "Background Updated",
+        description: "Your custom background has been set!",
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   const getInitials = (name: string | null) => {
@@ -385,18 +439,37 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="relative w-full max-w-md mb-6 rounded-2xl overflow-hidden"
+            className="relative w-full max-w-md mb-10 rounded-2xl overflow-hidden"
           >
             {/* Background Image */}
             <div 
               className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-primary/5"
               style={{
-                backgroundImage: `url('${selectedBackground.url}')`,
+                backgroundImage: `url('${customBackground || selectedBackground.url}')`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
             />
             <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+            
+            {/* 3-dot Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors">
+                  <MoreVertical className="h-4 w-4 text-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <Dialog open={isBackgroundDialogOpen} onOpenChange={setIsBackgroundDialogOpen}>
+                  <DialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      Change Background
+                    </DropdownMenuItem>
+                  </DialogTrigger>
+                </Dialog>
+              </DropdownMenuContent>
+            </DropdownMenu>
             
             {/* Content */}
             <div className="relative p-6 text-center">
@@ -413,30 +486,66 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          {/* Background Options */}
-          <div className="flex items-center gap-2 mb-10">
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-            <div className="flex gap-2">
-              {BACKGROUND_OPTIONS.map((bg) => (
-                <button
-                  key={bg.id}
-                  onClick={() => handleBackgroundChange(bg)}
-                  className={`w-8 h-8 rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedBackground.id === bg.id
-                      ? 'border-primary scale-110'
-                      : 'border-transparent hover:border-muted-foreground/50'
-                  }`}
-                  title={bg.label}
-                >
-                  <img
-                    src={bg.url}
-                    alt={bg.label}
-                    className="w-full h-full object-cover"
+          {/* Background Dialog */}
+          <Dialog open={isBackgroundDialogOpen} onOpenChange={setIsBackgroundDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Change Background</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-3">Choose a preset background</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {BACKGROUND_OPTIONS.map((bg) => (
+                      <button
+                        key={bg.id}
+                        onClick={() => handleBackgroundChange(bg)}
+                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                          !customBackground && selectedBackground.id === bg.id
+                            ? 'border-primary ring-2 ring-primary/30'
+                            : 'border-transparent hover:border-muted-foreground/50'
+                        }`}
+                        title={bg.label}
+                      >
+                        <img
+                          src={bg.url}
+                          alt={bg.label}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">or</span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="file"
+                    ref={bgFileInputRef}
+                    onChange={handleCustomBackgroundUpload}
+                    accept="image/*"
+                    className="hidden"
                   />
-                </button>
-              ))}
-            </div>
-          </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => bgFileInputRef.current?.click()}
+                    className="w-full gap-2"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    Upload Custom Wallpaper
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Meeting Actions */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl mb-8">
