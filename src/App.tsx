@@ -14,6 +14,7 @@ import OrganizationAdmin from "./pages/OrganizationAdmin";
 import Dashboard from "./pages/Dashboard";
 import MeetingRoom from "./pages/MeetingRoom";
 import JoinMeeting from "./pages/JoinMeeting";
+import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/join-organization" element={<JoinOrganization />} />
             <Route path="/organization" element={<OrganizationAdmin />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/meeting/:meetingId" element={<MeetingRoom />} />
             <Route path="/join" element={<JoinMeeting />} />
             <Route path="*" element={<NotFound />} />

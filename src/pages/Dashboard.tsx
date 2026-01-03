@@ -321,24 +321,25 @@ const Dashboard = () => {
         {/* Navigation */}
         <nav className="flex-1">
           <div className="space-y-1">
-            {[
-              { icon: Calendar, label: "Calendar", active: false },
-              { icon: MessageSquare, label: "Chats", active: false },
-              { icon: Video, label: "Meetings", active: true },
-              { icon: Users, label: "Contacts", active: false },
-            ].map((item) => (
-              <button
-                key={item.label}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  item.active
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-secondary"
-                }`}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </button>
-            ))}
+            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-muted-foreground hover:bg-secondary">
+              <Calendar className="h-5 w-5" />
+              Calendar
+            </button>
+            <Link 
+              to="/chat" 
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-muted-foreground hover:bg-secondary"
+            >
+              <MessageSquare className="h-5 w-5" />
+              Chats
+            </Link>
+            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors bg-primary/10 text-primary">
+              <Video className="h-5 w-5" />
+              Meetings
+            </button>
+            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-muted-foreground hover:bg-secondary">
+              <Users className="h-5 w-5" />
+              Contacts
+            </button>
           </div>
         </nav>
 
