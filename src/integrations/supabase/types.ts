@@ -76,6 +76,63 @@ export type Database = {
           },
         ]
       }
+      meeting_participants: {
+        Row: {
+          id: string
+          joined_at: string
+          left_at: string | null
+          meeting_id: string
+          user_id: string | null
+          user_name: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          meeting_id: string
+          user_id?: string | null
+          user_name: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          meeting_id?: string
+          user_id?: string | null
+          user_name?: string
+        }
+        Relationships: []
+      }
+      meeting_signals: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          id: string
+          meeting_id: string
+          signal_data: Json
+          signal_type: string
+          to_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          id?: string
+          meeting_id: string
+          signal_data: Json
+          signal_type: string
+          to_user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          id?: string
+          meeting_id?: string
+          signal_data?: Json
+          signal_type?: string
+          to_user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           connection_id: string
