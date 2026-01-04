@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -16,23 +16,28 @@ import {
   Smile,
   Copy,
   Settings,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaStream } from "@/hooks/useMediaStream";
 import { useScreenShare } from "@/hooks/useScreenShare";
+import { useWebRTC } from "@/hooks/useWebRTC";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { useAuth } from "@/contexts/AuthContext";
 import northstoneLogo from "@/assets/northstone-logo.jpeg";
 
 const MeetingRoom = () => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [userName, setUserName] = useState("You");
   const [handRaised, setHandRaised] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   const {
     stream,
@@ -51,6 +56,20 @@ const MeetingRoom = () => {
     stopScreenShare,
   } = useScreenShare();
 
+  // Get visitorId - use auth user id or generate a guest id
+  const visitorId = user?.id || sessionStorage.getItem('guestVisitorId') || (() => {
+    const id = crypto.randomUUID();
+    sessionStorage.setItem('guestVisitorId', id);
+    return id;
+  })();
+
+  const { participants, isConnecting } = useWebRTC({
+    meetingId: meetingId || '',
+    localStream: stream,
+    visitorId,
+    userName,
+  });
+
   // Initialize media on mount
   useEffect(() => {
     const init = async () => {
@@ -59,6 +78,7 @@ const MeetingRoom = () => {
         setUserName(storedName);
       }
       await startStream(true, true);
+      setIsReady(true);
     };
     init();
 
@@ -123,6 +143,10 @@ const MeetingRoom = () => {
     navigate("/dashboard");
   };
 
+  // Calculate grid layout based on participant count
+  const totalParticipants = 1 + participants.length;
+  const gridCols = totalParticipants <= 1 ? 1 : totalParticipants <= 4 ? 2 : 3;
+
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Top Bar */}
@@ -143,6 +167,15 @@ const MeetingRoom = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {isConnecting && (
+            <span className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Connecting...
+            </span>
+          )}
+          <span className="text-sm font-medium text-primary">
+            {totalParticipants} participant{totalParticipants !== 1 ? 's' : ''}
+          </span>
           <span className="text-sm text-muted-foreground">
             {formatTime(elapsedTime)}
           </span>
@@ -159,13 +192,18 @@ const MeetingRoom = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Video Grid */}
         <div className="flex-1 p-4 overflow-auto">
-          <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-3 auto-rows-fr">
+          <div 
+            className="h-full grid gap-3 auto-rows-fr"
+            style={{ 
+              gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` 
+            }}
+          >
             {/* Screen share (if active) */}
             {isSharing && screenStream && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="col-span-full lg:col-span-2 relative rounded-xl overflow-hidden bg-surface min-h-[300px]"
+                className="col-span-full relative rounded-xl overflow-hidden bg-surface min-h-[300px]"
               >
                 <video
                   autoPlay
@@ -201,23 +239,45 @@ const MeetingRoom = () => {
               />
             </motion.div>
 
-            {/* Placeholder for remote participants */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="min-h-[200px] relative rounded-xl overflow-hidden bg-surface"
-            >
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary">
-                <Users className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-muted-foreground text-sm text-center px-4">
-                  Waiting for others to join...
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Share the meeting code: <span className="font-mono text-primary">{meetingId}</span>
-                </p>
-              </div>
-            </motion.div>
+            {/* Remote participants */}
+            {participants.map((participant, index) => (
+              <motion.div
+                key={participant.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 + index * 0.1 }}
+                className="min-h-[200px]"
+              >
+                <VideoPlayer
+                  stream={participant.stream || null}
+                  name={participant.name}
+                  isLocal={false}
+                  isMuted={!participant.isAudioEnabled}
+                  isVideoOff={!participant.isVideoEnabled}
+                  className="h-full w-full"
+                />
+              </motion.div>
+            ))}
+
+            {/* Placeholder when alone */}
+            {participants.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                className="min-h-[200px] relative rounded-xl overflow-hidden bg-surface"
+              >
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary">
+                  <Users className="h-12 w-12 text-muted-foreground mb-3" />
+                  <p className="text-muted-foreground text-sm text-center px-4">
+                    Waiting for others to join...
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Share the meeting code: <span className="font-mono text-primary">{meetingId}</span>
+                  </p>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
 
@@ -248,6 +308,7 @@ const MeetingRoom = () => {
               <div className="flex-1 p-4 overflow-auto">
                 {showParticipants && (
                   <div className="space-y-2">
+                    {/* Local user */}
                     <div className="flex items-center gap-3 p-2 rounded-lg bg-primary/10">
                       <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                         <span className="text-sm font-medium text-primary">
@@ -258,6 +319,19 @@ const MeetingRoom = () => {
                       {!isAudioEnabled && <MicOff className="h-4 w-4 text-muted-foreground" />}
                       {handRaised && <Hand className="h-4 w-4 text-yellow-500" />}
                     </div>
+                    
+                    {/* Remote participants */}
+                    {participants.map((participant) => (
+                      <div key={participant.id} className="flex items-center gap-3 p-2 rounded-lg bg-secondary">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {participant.name[0]?.toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="text-sm flex-1">{participant.name}</span>
+                        {!participant.isAudioEnabled && <MicOff className="h-4 w-4 text-muted-foreground" />}
+                      </div>
+                    ))}
                   </div>
                 )}
                 {showChat && (
