@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
 
 interface Profile {
   id: string;
@@ -12,13 +16,21 @@ interface Profile {
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   profile: Profile | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+}
+
+interface StoredUser {
+  id: string;
+  email: string;
+  password: string;
+  full_name: string | null;
+  avatar_url?: string | null;
+  account_type?: 'personal' | 'organization_admin';
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,93 +43,141 @@ export const useAuth = () => {
   return context;
 };
 
+const USERS_KEY = 'unify_users';
+const CURRENT_USER_KEY = 'unify_current_user';
+
+const getStoredUsers = (): StoredUser[] => {
+  const users = localStorage.getItem(USERS_KEY);
+  return users ? JSON.parse(users) : [];
+};
+
+const saveUsers = (users: StoredUser[]) => {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+};
+
+const getCurrentUser = (): User | null => {
+  const user = localStorage.getItem(CURRENT_USER_KEY);
+  return user ? JSON.parse(user) : null;
+};
+
+const setCurrentUser = (user: User | null) => {
+  if (user) {
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(CURRENT_USER_KEY);
+  }
+};
+
+const getProfile = (userId: string): Profile | null => {
+  const users = getStoredUsers();
+  const storedUser = users.find(u => u.id === userId);
+  if (!storedUser) return null;
+  
+  return {
+    id: storedUser.id,
+    email: storedUser.email,
+    full_name: storedUser.full_name,
+    avatar_url: storedUser.avatar_url || null,
+    account_type: storedUser.account_type || 'personal',
+  };
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    
-    if (error) {
-      console.error('Error fetching profile:', error);
-      return null;
-    }
-    return data as Profile | null;
-  };
-
   const refreshProfile = async () => {
     if (user) {
-      const profileData = await fetchProfile(user.id);
+      const profileData = getProfile(user.id);
       setProfile(profileData);
     }
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Defer profile fetch with setTimeout
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id).then(setProfile);
-          }, 0);
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
-      }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    // Check for existing session
+    const storedUser = getCurrentUser();
+    if (storedUser) {
+      setUser(storedUser);
+      const profileData = getProfile(storedUser.id);
+      setProfile(profileData);
+    }
+    setLoading(false);
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-    return { error: error as Error | null };
+  const signUp = async (email: string, password: string, fullName: string): Promise<{ error: Error | null }> => {
+    try {
+      const users = getStoredUsers();
+      
+      // Check if user already exists
+      if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+        return { error: new Error('This email is already registered') };
+      }
+
+      // Create new user
+      const newUser: StoredUser = {
+        id: crypto.randomUUID(),
+        email: email.toLowerCase(),
+        password,
+        full_name: fullName,
+        avatar_url: null,
+        account_type: 'personal',
+      };
+
+      users.push(newUser);
+      saveUsers(users);
+
+      // Auto sign in after signup
+      const userWithoutPassword: User = {
+        id: newUser.id,
+        email: newUser.email,
+        full_name: newUser.full_name,
+      };
+      
+      setCurrentUser(userWithoutPassword);
+      setUser(userWithoutPassword);
+      
+      const profileData = getProfile(newUser.id);
+      setProfile(profileData);
+
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error: error as Error | null };
+  const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
+    try {
+      const users = getStoredUsers();
+      const foundUser = users.find(
+        u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+      );
+
+      if (!foundUser) {
+        return { error: new Error('Invalid email or password') };
+      }
+
+      const userWithoutPassword: User = {
+        id: foundUser.id,
+        email: foundUser.email,
+        full_name: foundUser.full_name,
+      };
+
+      setCurrentUser(userWithoutPassword);
+      setUser(userWithoutPassword);
+      
+      const profileData = getProfile(foundUser.id);
+      setProfile(profileData);
+
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setCurrentUser(null);
     setUser(null);
-    setSession(null);
     setProfile(null);
   };
 
@@ -125,7 +185,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
-        session,
         profile,
         loading,
         signUp,
