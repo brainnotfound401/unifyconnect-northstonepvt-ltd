@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Video, Mic, MicOff, VideoOff, Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,10 +9,18 @@ import northstoneLogo from "@/assets/northstone-logo.jpeg";
 
 const JoinMeeting = () => {
   const navigate = useNavigate();
-  const [meetingCode, setMeetingCode] = useState("");
+  const { meetingId } = useParams();
+  const [searchParams] = useSearchParams();
+  
+  // Get meeting code from URL params or query string
+  const meetingCodeFromUrl = meetingId || searchParams.get('code') || '';
+  
+  const [meetingCode, setMeetingCode] = useState(meetingCodeFromUrl);
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  
+  const hasMeetingCodeFromUrl = Boolean(meetingCodeFromUrl);
   
   const {
     stream,
@@ -45,10 +53,11 @@ const JoinMeeting = () => {
   }, [stream]);
 
   const handleJoin = () => {
-    if (meetingCode.trim() && name.trim()) {
+    const codeToUse = meetingCode.trim();
+    if (codeToUse && name.trim()) {
       // Store name in sessionStorage for the meeting room
       sessionStorage.setItem('userName', name);
-      navigate(`/meeting/${meetingCode}`);
+      navigate(`/meeting/${codeToUse}`);
     }
   };
 
@@ -170,7 +179,10 @@ const JoinMeeting = () => {
               Join Meeting
             </h1>
             <p className="text-muted-foreground mb-8">
-              Enter the meeting code provided by the host
+              {hasMeetingCodeFromUrl 
+                ? "Enter your name to join the meeting"
+                : "Enter your name and meeting code to join"
+              }
             </p>
 
             <div className="space-y-4">
@@ -183,20 +195,30 @@ const JoinMeeting = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="h-12 bg-secondary border-border"
+                  autoFocus
                 />
               </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Meeting Code
-                </label>
-                <Input
-                  placeholder="e.g., unify-abc123"
-                  value={meetingCode}
-                  onChange={(e) => setMeetingCode(e.target.value)}
-                  className="h-12 bg-secondary border-border"
-                />
-              </div>
+              {!hasMeetingCodeFromUrl && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Meeting Code
+                  </label>
+                  <Input
+                    placeholder="e.g., unify-abc123"
+                    value={meetingCode}
+                    onChange={(e) => setMeetingCode(e.target.value)}
+                    className="h-12 bg-secondary border-border"
+                  />
+                </div>
+              )}
+
+              {hasMeetingCodeFromUrl && (
+                <div className="bg-secondary/50 rounded-lg p-3 border border-border">
+                  <p className="text-sm text-muted-foreground">Meeting Code</p>
+                  <p className="font-medium text-foreground">{meetingCodeFromUrl}</p>
+                </div>
+              )}
 
               <Button
                 variant="hero"
