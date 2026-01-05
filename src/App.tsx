@@ -51,6 +51,7 @@ const App = () => {
               <Route path="/chat" element={<Chat />} />
               <Route path="/meeting/:meetingId" element={<MeetingRoom />} />
               <Route path="/join" element={<JoinMeeting />} />
+              <Route path="/join/:meetingId" element={<JoinMeeting />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
