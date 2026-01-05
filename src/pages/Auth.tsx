@@ -70,26 +70,16 @@ const Auth = () => {
 
         const { error } = await signUp(formData.email, formData.password, formData.fullName);
         if (error) {
-          if (error.message.includes('already registered')) {
-            toast({
-              variant: 'destructive',
-              title: 'Account exists',
-              description: 'This email is already registered. Try signing in instead.',
-            });
-          } else {
-            toast({
-              variant: 'destructive',
-              title: 'Sign up failed',
-              description: error.message,
-            });
-          }
+          toast({
+            variant: 'destructive',
+            title: 'Sign up failed',
+            description: error.message,
+          });
         } else {
           toast({
             title: 'Account created!',
-            description: 'You can now sign in with your credentials.',
+            description: 'Welcome to Unify!',
           });
-          setIsSignUp(false);
-          setFormData(prev => ({ ...prev, password: '' }));
         }
       } else {
         const result = signInSchema.safeParse(formData);
